@@ -1,5 +1,5 @@
 {
-  "name": "addcnos/hyperf-elasticsearch",
+  "name": "assert6/hyperf-elasticsearch",
   "description": "Hyperf ElasticSearch Client",
   "require": {
     "php": ">=8.1",
