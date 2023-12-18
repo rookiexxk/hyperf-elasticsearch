@@ -2,13 +2,20 @@
   "name": "janartist/elasticsearch",
   "description": "ES客户端",
   "require": {
-    "php": ">=7.2",
-    "hyperf/framework": "*",
-    "hyperf/utils": "*",
+    "php": ">=8.1",
+    "ext-swoole": ">=5.0",
+    "hyperf/contract": "~3.1.0",
+    "hyperf/collection": "~3.1.0",
+    "hyperf/di": "~3.1.0",
+    "hyperf/framework": "~3.1.0",
+    "hyperf/logger": "~3.1.0",
+    "hyperf/guzzle": "~3.1.0"
     "elasticsearch/elasticsearch": "^7.0"
   },
   "require-dev": {
-    "roave/security-advisories": "dev-master"
+    "roave/security-advisories": "dev-master",
+    "friendsofhyperf/rector": "^0.1.5",
+    "friendsofphp/php-cs-fixer": "^3.41"
   },
   "authors": [
     {
@@ -25,11 +32,5 @@
     "hyperf": {
       "config": "Janartist\\Elasticsearch\\ConfigProvider"
     }
-  },
-  "repositories": [
-    {
-      "type": "composer",
-      "url": "https://mirrors.aliyun.com/composer/"
-    }
-  ]
+  }
 }

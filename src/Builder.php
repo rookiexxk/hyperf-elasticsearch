@@ -4,9 +4,14 @@ declare(strict_types=1);
 
 namespace Janartist\Elasticsearch;
 
+use Hyperf\Collection\Collection;
+use Hyperf\Context\ApplicationContext;
 use Hyperf\Logger\LoggerFactory;
-use Hyperf\Utils\ApplicationContext;
-use Hyperf\Utils\Collection;
+use stdClass;
+
+use function Hyperf\Collection\collect;
+use function Hyperf\Support\call;
+use function Hyperf\Support\make;
 
 class Builder
 {
@@ -14,73 +19,76 @@ class Builder
      * @var \Elasticsearch\Client
      */
     protected $client;
+
     /**
-     * The base query
+     * The base query.
      *
      * @var []
      */
     protected $query;
+
     /**
      * @var array
      */
     protected $highlight = [];
 
     protected $sql;
+
     /**
      * @var []
      */
     protected $sort = [];
+
     /**
      * The model being queried.
      *
      * @var Model
      */
     protected $model;
+
     /**
      * @var int
      */
     protected $take = 50;
+
     /**
      * @var array
      */
     protected $operate = ['=', '>', '<', '>=', '<=', '!=', '<>', 'in', 'not in', 'like', 'regex', 'prefix'];
 
     /**
-     * 分页
-     * @param int $page
-     * @param int $size
-     * @return Paginator
+     * 分页.
      */
-    public function page(int $size = 50, int $page = 1) : Paginator
+    public function page(int $size = 50, int $page = 1): Paginator
     {
         $from = (($page - 1) * $size) + 1;
         $this->sql = [
             'from' => $from,
             'size' => $size,
             'index' => $this->model->getIndex(),
-            'body'  => [
+            'body' => [
                 'query' => $this->query,
                 'highlight' => $this->highlight,
-                'sort' => $this->sort
-            ]
+                'sort' => $this->sort,
+            ],
         ];
         if (empty($this->query)) {
             $this->sql = [
                 'from' => $from,
                 'size' => $size,
                 'index' => $this->model->getIndex(),
-                'body'  => [
+                'body' => [
                     'query' => [
-                        'match_all' => new \stdClass()
-                    ]
-                ]
+                        'match_all' => new stdClass(),
+                    ],
+                ],
             ];
         }
         $result = $this->run('search', $this->sql);
         $original = $result['hits']['hits'] ?? [];
 
         $collection = Collection::make($original)->map(function ($value) {
-            $attributes =  $value['_source'] ?? [];
+            $attributes = $value['_source'] ?? [];
             $model = $this->model->newInstance();
             $model->setAttributes($attributes);
             $model->setOriginal($value);
@@ -88,63 +96,64 @@ class Builder
         });
         return make(Paginator::class, ['items' => $collection, 'perPage' => $size, 'currentPage' => $page]);
     }
+
     public function get($size = 50): Collection
     {
         $this->sql = [
             'from' => 1,
             'size' => $size,
             'index' => $this->model->getIndex(),
-            'body'  => [
+            'body' => [
                 'query' => $this->query,
                 'highlight' => $this->highlight,
-                'sort' => $this->sort
-            ]
+                'sort' => $this->sort,
+            ],
         ];
         if (empty($this->query)) {
             $this->sql = [
                 'from' => 1,
-                'size'   => $size,
+                'size' => $size,
                 'index' => $this->model->getIndex(),
-                'body'  => [
+                'body' => [
                     'query' => [
-                        'match_all' => new \stdClass()
-                    ]
-                ]
+                        'match_all' => new stdClass(),
+                    ],
+                ],
             ];
         }
         $result = $this->run('search', $this->sql);
         $original = $result['hits']['hits'] ?? [];
 
-        $collection = Collection::make($original)->map(function ($value) {
-            $attributes =  $value['_source'] ?? [];
+        return Collection::make($original)->map(function ($value) {
+            $attributes = $value['_source'] ?? [];
             $model = $this->model->newInstance();
             $model->setAttributes($attributes);
             $model->setOriginal($value);
             return $model;
         });
-
-        return $collection;
     }
 
-    public function first() : Model
+    public function first(): Model
     {
         return $this->take(1)->get()->first();
     }
+
     public function take(int $take): Builder
     {
         $this->take = $take;
         return $this;
     }
+
     /**
      * 查找单条
-     * @param $id
+     * @param mixed $id
      * @return array
      */
-    public function find($id) : Model
+    public function find($id): Model
     {
         $this->sql = [
             'index' => $this->model->getIndex(),
-            'id'    => $id
+            'id' => $id,
         ];
         $result = $this->run('get', $this->sql);
 
@@ -152,12 +161,9 @@ class Builder
         $this->model->setOriginal($result);
         return $this->model;
     }
+
     /**
-     * insert
-     *
-     * @param array $values
-     *
-     * @return Collection
+     * insert.
      */
     public function insert(array $values): Collection
     {
@@ -166,26 +172,23 @@ class Builder
             $body['body'][] = [
                 'index' => [
                     '_index' => $this->model->getIndex(),
-                ]
+                ],
             ];
             $body['body'][] = $value;
         }
         $this->sql = $body;
         $result = $this->run('bulk', $this->sql);
-        $collection = collect($result['items'])->map(function ($value, $key) use ($values) {
+        return collect($result['items'])->map(function ($value, $key) use ($values) {
             $this->model->setAttributes(Arr::merge($values[$key] ?? [], ['_id' => $values['index']['_id'] ?? '']));
             $this->model->setOriginal($value);
             return $this->model;
         });
-
-        return $collection;
     }
+
     /**
-     * insert
+     * insert.
      *
-     * @param array $values
-     *
-     * @return Collection
+     * @return \Hyperf\Collection\Collection
      */
     public function create(array $value): Model
     {
@@ -193,20 +196,20 @@ class Builder
         $except = Arr::only($value, ['id', 'routing', 'timestamp']);
         $this->sql = Arr::merge($except, [
             'index' => $this->model->getIndex(),
-            'body' => $body
+            'body' => $body,
         ]);
         $result = $this->run('index', $this->sql);
-        if (!empty($data['result']) && $data['result'] == 'created') {
+        if (! empty($result['result']) && $result['result'] == 'created') {
             $this->model->setOriginal($result);
             $this->model->setAttributes(Arr::merge($body, ['_id' => $result['_id'] ?? '']));
         }
         return $this->model;
     }
+
     /**
-     * update
+     * update.
      *
      * @param string $id
-     * @param array $value
      *
      * @return bool
      */
@@ -219,34 +222,34 @@ class Builder
                 'body' => [
                     'doc' => $value,
                 ],
-            ]
+            ],
         ]);
-        if (!empty($result['result']) && ($result['result'] == 'updated' || $result['result'] == 'noop')) {
+        if (! empty($result['result']) && ($result['result'] == 'updated' || $result['result'] == 'noop')) {
             $this->model->setOriginal($result);
             $this->model->setAttributes(['_id' => $result['_id'] ?? '']);
         }
         return $this->model;
     }
+
     /**
-     * delete
+     * delete.
      *
      * @param string $id
-     *
-     * @return bool
      */
-    public function delete($id):bool
+    public function delete($id): bool
     {
         $result = $this->run('delete', [
             [
                 'index' => $this->model->getIndex(),
                 'id' => $id,
-            ]
+            ],
         ]);
-        if (!empty($result['result']) && $result['result'] == 'deleted') {
+        if (! empty($result['result']) && $result['result'] == 'deleted') {
             return true;
         }
         return false;
     }
+
     public function updateMapping(array $mappings)
     {
         $mappings = collect($mappings)->map(function ($value, $key) {
@@ -262,25 +265,23 @@ class Builder
         $this->sql = [
             'index' => $this->model->getIndex(),
             'body' => [
-                'properties' => $mappings
-            ]
+                'properties' => $mappings,
+            ],
         ];
-        $result = $this->run('indices.putMapping', $this->sql);
-
-        return $result;
+        return $this->run('indices.putMapping', $this->sql);
     }
+
     public function updateSetting(array $settings)
     {
         $this->sql = [
             'index' => $this->model->getIndex(),
             'body' => [
-                'settings' => $settings
-            ]
+                'settings' => $settings,
+            ],
         ];
-        $result = $this->run('putSettings', $this->sql);
-
-        return $result;
+        return $this->run('putSettings', $this->sql);
     }
+
     public function createIndex(array $mappings = [], array $settings = [])
     {
         $mappings = Arr::merge(
@@ -308,12 +309,10 @@ class Builder
         $this->sql = [
             'index' => $this->model->getIndex(),
             'id' => '1',
-            'body' => compact('mappings') + compact('settings')
+            'body' => compact('mappings') + compact('settings'),
         ];
         // Create the index
-        $result = $this->run('create', $this->sql);
-
-        return $result;
+        return $this->run('create', $this->sql);
     }
 
     public function matchPhrase(string $field, $value)
@@ -321,14 +320,14 @@ class Builder
         $this->query['match_phrase'][$field] = $value;
         return $this;
     }
+
     public function match(string $field, $value)
     {
         $this->query['match'][$field] = $value;
         return $this;
     }
+
     /**
-     * @param string $field
-     * @param string $operate
      * @param null $value
      */
     public function where(string $field, string $operate, $value = null): Builder
@@ -342,25 +341,68 @@ class Builder
         }
         return $this;
     }
+
     public function whereIn(string $field, $value): Builder
     {
         return $this->where($field, 'in', $value);
     }
+
     public function whereNotIn(string $field, $value): Builder
     {
         return $this->where($field, 'not in', $value);
     }
+
     public function whereLike(string $field, $value): Builder
     {
         return $this->where($field, 'like', $value);
     }
+
+    public function highlight($fields)
+    {
+        $fields = (array) $fields;
+
+        $fields = Collection::make($fields)
+            ->map(function ($item) {
+                return [
+                    $item => new stdClass(),
+                ];
+            })->toArray();
+        $this->highlight = compact('fields');
+        return $this;
+    }
+
     /**
-     * parseWhere
+     * orderBy.
+     */
+    public function orderBy(string $field, bool $desc = false): Builder
+    {
+        $sort = $desc ? 'desc' : 'asc';
+        if (! is_array($this->sort)) {
+            $this->sort = [];
+        }
+        $this->sort[] = [$field => ['order' => $sort]];
+
+        return $this;
+    }
+
+    /**
+     * Set a model instance for the model being queried.
      *
-     * @param string $field
-     * @param string $operate
-     * @param        $value
+     * @return $this
+     */
+    public function setModel(Model $model)
+    {
+        $this->model = $model;
+        $this->client = $model->getClient();
+        $this->highlight = new stdClass();
+        $this->sort = new stdClass();
+        return $this;
+    }
+
+    /**
+     * parseWhere.
      *
+     * @param mixed $value
      * @return array
      */
     protected function parseQuery(string $field, string $operate, $value): Builder
@@ -415,7 +457,8 @@ class Builder
         $this->query['bool'][$type][] = $result;
         return $this;
     }
-    protected function run($method, ... $parameters)
+
+    protected function run($method, ...$parameters)
     {
         $client = $this->client;
         $sql = $this->sql;
@@ -429,50 +472,5 @@ class Builder
             ->get('elasticsearch', 'default')
             ->debug('Elasticsearch run', compact('method', 'parameters', 'sql'));
         return call([$client, $method], $parameters);
-    }
-    public function highlight($fields)
-    {
-        $fields = (array) $fields;
-
-        $fields = Collection::make($fields)
-            ->map(function ($item) {
-                return [
-                    $item => new \stdClass()
-                ];
-            })->toArray();
-        $this->highlight = compact('fields');
-        return $this;
-    }
-    /**
-     * orderBy
-     *
-     * @param string $field
-     * @param string $sort
-     *
-     * @return Builder
-     */
-    public function orderBy(string $field, bool $desc = false): Builder
-    {
-        $sort = $desc ? 'desc' : 'asc';
-        if (!is_array($this->sort)) {
-            $this->sort = [];
-        }
-        $this->sort[] = [$field => ['order' => $sort]];
-
-        return $this;
-    }
-    /**
-     * Set a model instance for the model being queried.
-     *
-     * @param Model $model
-     * @return $this
-     */
-    public function setModel(Model $model)
-    {
-        $this->model = $model;
-        $this->client = $model->getClient();
-        $this->highlight = new \stdClass();
-        $this->sort = new \stdClass();
-        return $this;
     }
 }

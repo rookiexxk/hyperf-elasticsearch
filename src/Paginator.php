@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace Janartist\Elasticsearch;
 
-use Hyperf\Utils\Collection;
-use Hyperf\Utils\Contracts\Arrayable;
-use Hyperf\Utils\Contracts\Jsonable;
+use Hyperf\Collection\Collection;
+use Hyperf\Contract\Arrayable;
+use Hyperf\Contract\Jsonable;
 use JsonSerializable;
 
 class Paginator implements Arrayable, JsonSerializable, Jsonable
@@ -42,6 +42,7 @@ class Paginator implements Arrayable, JsonSerializable, Jsonable
     {
         return $this->toJson();
     }
+
     /**
      * Determine if there are more items in the data source.
      */
@@ -59,7 +60,7 @@ class Paginator implements Arrayable, JsonSerializable, Jsonable
             'current_page' => $this->currentPage,
             'per_page' => $this->perPage,
             'data' => $this->items->toArray(),
-            'has_more' => $this->hasMorePages()
+            'has_more' => $this->hasMorePages(),
         ];
     }
 
@@ -78,6 +79,7 @@ class Paginator implements Arrayable, JsonSerializable, Jsonable
     {
         return json_encode($this->jsonSerialize(), $options);
     }
+
     /**
      * Set the items for the paginator.
      * @param mixed $items

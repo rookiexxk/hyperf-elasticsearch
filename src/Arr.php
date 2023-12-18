@@ -4,9 +4,7 @@ declare(strict_types=1);
 
 namespace Janartist\Elasticsearch;
 
-use Hyperf\Utils\Arr as Arrs;
-
-class Arr extends Arrs
+class Arr extends \Hyperf\Collection\Arr
 {
     /**
      * Merges two or more arrays into one recursively.
@@ -17,17 +15,17 @@ class Arr extends Arrs
      * For integer-keyed elements, the elements from the latter array will
      * be appended to the former array.
      *
-     * @param array $a array to be merged to
-     * @param array $b array to be merged from. You can specify additional
-     *                 arrays via third argument, fourth argument etc.
+     * @param array $array1 array to be merged to
+     * @param array $array2 array to be merged from. You can specify additional
+     *                      arrays via third argument, fourth argument etc.
      *
      * @return array the merged array (the original arrays are not changed.)
      */
-    public static function merge($a, $b): array
+    public static function merge(array $array1, array $array2, bool $unique = true): array
     {
         $args = func_get_args();
-        $res  = array_shift($args);
-        while (!empty($args)) {
+        $res = array_shift($args);
+        while (! empty($args)) {
             $next = array_shift($args);
             foreach ($next as $k => $v) {
                 if (is_int($k)) {

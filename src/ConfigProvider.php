@@ -15,8 +15,8 @@ class ConfigProvider
                     'description' => 'The config for elasticsearch.',
                     'source' => __DIR__ . '/../publish/elasticsearch.php',
                     'destination' => BASE_PATH . '/config/autoload/elasticsearch.php',
-                ]
-            ]
+                ],
+            ],
         ];
     }
 }

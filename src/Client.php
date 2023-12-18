@@ -1,17 +1,16 @@
 <?php
 
 declare(strict_types=1);
-/**
- * ES客户端
- */
 
 namespace Janartist\Elasticsearch;
 
 use Elasticsearch\ClientBuilder;
-use Hyperf\Guzzle\RingPHP\PoolHandler;
-use Swoole\Coroutine;
 use Hyperf\Contract\ConfigInterface;
 use Hyperf\Contract\ContainerInterface;
+use Hyperf\Guzzle\RingPHP\PoolHandler;
+use Swoole\Coroutine;
+
+use function Hyperf\Support\make;
 
 class Client
 {
@@ -19,6 +18,7 @@ class Client
      * @var ContainerInterface
      */
     protected $container;
+
     /**
      * @var array
      */
