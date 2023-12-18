@@ -1,9 +1,9 @@
-# ES客户端 - hyperf版本
+# ElasticSearch - Hyperf 客户端
 
 ### Composer
 
 ```
-composer require janartist/elasticsearch
+composer require assert6/hyperf-elasticsearch
 ```
 
 ### Model
