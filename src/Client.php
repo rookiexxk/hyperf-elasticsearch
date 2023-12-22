@@ -51,7 +51,6 @@ class Client
             $builder->setHandler($handler);
         }
 
-        return $builder->setHosts($config['hosts'])
-            ->build();
+        return $builder->setHosts($config['hosts'])->build();
     }
 }

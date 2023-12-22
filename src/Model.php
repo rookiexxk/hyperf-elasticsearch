@@ -16,15 +16,9 @@ abstract class Model implements Arrayable, Jsonable, JsonSerializable
 {
     use HasAttributes;
 
-    /**
-     * @var string 索引
-     */
-    protected $index;
+    protected string $index;
 
-    /**
-     * @var Client
-     */
-    protected $client;
+    protected Client $client;
 
     /**
      * @var string
@@ -38,64 +32,41 @@ abstract class Model implements Arrayable, Jsonable, JsonSerializable
 
     /**
      * Handle dynamic method calls into the model.
-     *
-     * @param string $method
-     * @param array $parameters
      */
-    public function __call($method, $parameters)
+    public function __call(string $method, array $parameters)
     {
         return call([$this->newQuery(), $method], $parameters);
     }
 
     /**
      * Handle dynamic static method calls into the method.
-     *
-     * @param string $method
-     * @param array $parameters
      */
-    public static function __callStatic($method, $parameters)
+    public static function __callStatic(string $method, array $parameters)
     {
         return (new static())->{$method}(...$parameters);
     }
 
-    /**
-     * @return Builder
-     */
-    public static function query()
+    public static function query(): Builder
     {
         return (new static())->newQuery();
     }
 
-    /**
-     * @return Builder
-     */
-    public function newQuery()
+    public function newQuery(): Builder
     {
         return $this->newModelBuilder()->setModel($this);
     }
 
-    /**
-     * @return \Elasticsearch\Client
-     */
-    public function getClient()
+    public function getClient(): \Elasticsearch\Client
     {
         return $this->client->create($this->connection);
     }
 
-    /**
-     * Create a new Model Collection instance.
-     *
-     * @return \Hyperf\Collection\Collection
-     */
-    public function newCollection(array $models = [])
+    public function newCollection(array $models = []): Collection
     {
         return new Collection($models);
     }
 
-    /**
-     * @return $this
-     */
-    public function newInstance()
+    public function newInstance(): self
     {
         $model = new static();
         return $model;
@@ -103,10 +74,8 @@ abstract class Model implements Arrayable, Jsonable, JsonSerializable
 
     /**
      * Create a new Model query builder.
-     *
-     * @return Builder
      */
-    public function newModelBuilder()
+    public function newModelBuilder(): Builder
     {
         return new Builder();
     }

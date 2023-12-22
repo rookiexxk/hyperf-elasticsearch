@@ -16,7 +16,10 @@
   "require-dev": {
     "roave/security-advisories": "dev-master",
     "friendsofhyperf/rector": "^0.1.5",
-    "friendsofphp/php-cs-fixer": "^3.41"
+    "friendsofphp/php-cs-fixer": "^3.41",
+    "phpstan/phpstan": "^1.10",
+    "hyperf/watcher": "^3.1",
+    "swoole/ide-helper": "^5.1"
   },
   "authors": [
     {

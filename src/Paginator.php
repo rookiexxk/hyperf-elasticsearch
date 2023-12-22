@@ -13,23 +13,19 @@ class Paginator implements Arrayable, JsonSerializable, Jsonable
 {
     /**
      * Determine if there are more items in the data source.
-     *
-     * @return bool
      */
-    protected $hasMore;
+    protected bool $hasMore;
 
-    protected $perPage;
+    protected int $perPage;
 
-    protected $currentPage;
+    protected int $currentPage;
 
-    protected $items;
+    protected mixed $items;
 
     /**
      * Create a new paginator instance.
-     *
-     * @param mixed $items
      */
-    public function __construct($items, int $perPage, int $currentPage)
+    public function __construct(mixed $items, int $perPage, int $currentPage)
     {
         $this->items = $items;
         $this->perPage = $perPage;
@@ -82,9 +78,8 @@ class Paginator implements Arrayable, JsonSerializable, Jsonable
 
     /**
      * Set the items for the paginator.
-     * @param mixed $items
      */
-    protected function setItems($items): void
+    protected function setItems(mixed $items): void
     {
         $this->items = $items instanceof Collection ? $items : Collection::make($items);
 

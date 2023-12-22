@@ -4,9 +4,12 @@ declare(strict_types=1);
 
 namespace Janartist\Elasticsearch;
 
+use Elasticsearch\Client;
 use Hyperf\Collection\Collection;
 use Hyperf\Context\ApplicationContext;
+use Hyperf\Di\Annotation\Inject;
 use Hyperf\Logger\LoggerFactory;
+use InvalidArgumentException;
 use stdClass;
 
 use function Hyperf\Collection\collect;
@@ -15,53 +18,30 @@ use function Hyperf\Support\make;
 
 class Builder
 {
-    /**
-     * @var \Elasticsearch\Client
-     */
-    protected $client;
+    #[Inject]
+    protected Client $client;
 
-    /**
-     * The base query.
-     *
-     * @var []
-     */
-    protected $query;
+    #[Inject]
+    protected Model $model;
 
-    /**
-     * @var array
-     */
-    protected $highlight = [];
+    protected array $query;
 
-    protected $sql;
+    protected array $highlight = [];
 
-    /**
-     * @var []
-     */
-    protected $sort = [];
+    protected array $sql;
 
-    /**
-     * The model being queried.
-     *
-     * @var Model
-     */
-    protected $model;
+    protected array $sort = [];
 
-    /**
-     * @var int
-     */
-    protected $take = 50;
+    protected int $take = 50;
 
-    /**
-     * @var array
-     */
-    protected $operate = ['=', '>', '<', '>=', '<=', '!=', '<>', 'in', 'not in', 'like', 'regex', 'prefix'];
+    protected array $operate = ['=', '>', '<', '>=', '<=', '!=', '<>', 'in', 'not in', 'like', 'regex', 'prefix'];
 
     /**
      * 分页.
      */
     public function page(int $size = 50, int $page = 1): Paginator
     {
-        $from = (($page - 1) * $size) + 1;
+        $from = (($page - 1) * $size);
         $this->sql = [
             'from' => $from,
             'size' => $size,
@@ -86,8 +66,7 @@ class Builder
         }
         $result = $this->run('search', $this->sql);
         $original = $result['hits']['hits'] ?? [];
-
-        $collection = Collection::make($original)->map(function ($value) {
+        $collection = collect($original)->map(function ($value) {
             $attributes = $value['_source'] ?? [];
             $model = $this->model->newInstance();
             $model->setAttributes($attributes);
@@ -100,7 +79,7 @@ class Builder
     public function get($size = 50): Collection
     {
         $this->sql = [
-            'from' => 1,
+            'from' => 0,
             'size' => $size,
             'index' => $this->model->getIndex(),
             'body' => [
@@ -111,7 +90,7 @@ class Builder
         ];
         if (empty($this->query)) {
             $this->sql = [
-                'from' => 1,
+                'from' => 0,
                 'size' => $size,
                 'index' => $this->model->getIndex(),
                 'body' => [
@@ -124,7 +103,7 @@ class Builder
         $result = $this->run('search', $this->sql);
         $original = $result['hits']['hits'] ?? [];
 
-        return Collection::make($original)->map(function ($value) {
+        return collect($original)->map(function ($value) {
             $attributes = $value['_source'] ?? [];
             $model = $this->model->newInstance();
             $model->setAttributes($attributes);
@@ -146,10 +125,8 @@ class Builder
 
     /**
      * 查找单条
-     * @param mixed $id
-     * @return array
      */
-    public function find($id): Model
+    public function find(mixed $id): Model
     {
         $this->sql = [
             'index' => $this->model->getIndex(),
@@ -186,9 +163,7 @@ class Builder
     }
 
     /**
-     * insert.
-     *
-     * @return \Hyperf\Collection\Collection
+     * create.
      */
     public function create(array $value): Model
     {
@@ -210,10 +185,8 @@ class Builder
      * update.
      *
      * @param string $id
-     *
-     * @return bool
      */
-    public function update(array $value, $id)
+    public function update(array $value, $id): Model
     {
         $result = $this->run('update', [
             [
@@ -233,10 +206,8 @@ class Builder
 
     /**
      * delete.
-     *
-     * @param string $id
      */
-    public function delete($id): bool
+    public function delete(mixed $id): bool
     {
         $result = $this->run('delete', [
             [
@@ -250,7 +221,7 @@ class Builder
         return false;
     }
 
-    public function updateMapping(array $mappings)
+    public function updateMapping(array $mappings): mixed
     {
         $mappings = collect($mappings)->map(function ($value, $key) {
             $valued = [];
@@ -268,10 +239,11 @@ class Builder
                 'properties' => $mappings,
             ],
         ];
+
         return $this->run('indices.putMapping', $this->sql);
     }
 
-    public function updateSetting(array $settings)
+    public function updateSetting(array $settings): mixed
     {
         $this->sql = [
             'index' => $this->model->getIndex(),
@@ -282,11 +254,11 @@ class Builder
         return $this->run('putSettings', $this->sql);
     }
 
-    public function createIndex(array $mappings = [], array $settings = [])
+    public function createIndex(array $mappings = [], array $settings = []): mixed
     {
         $mappings = Arr::merge(
-            Collection::make($this->model->getCasts())->map(function ($value, $key) {
-                $valued = '';
+            collect($this->model->getCasts())->map(function ($value, $key) {
+                $valued = [];
                 if (is_string($value)) {
                     $valued['type'] = $value;
                 }
@@ -295,8 +267,8 @@ class Builder
                 }
                 return $valued;
             })->toArray(),
-            Collection::make($mappings)->map(function ($value, $key) {
-                $valued = '';
+            collect($mappings)->map(function ($value, $key) {
+                $valued = [];
                 if (is_string($value)) {
                     $valued['type'] = $value;
                 }
@@ -315,22 +287,22 @@ class Builder
         return $this->run('create', $this->sql);
     }
 
-    public function matchPhrase(string $field, $value)
+    public function matchPhrase(string $field, mixed $value): Builder
     {
         $this->query['match_phrase'][$field] = $value;
         return $this;
     }
 
-    public function match(string $field, $value)
+    public function match(string $field, mixed $value): Builder
     {
         $this->query['match'][$field] = $value;
         return $this;
     }
 
     /**
-     * @param null $value
+     * where.
      */
-    public function where(string $field, string $operate, $value = null): Builder
+    public function where(string $field, string $operate, mixed $value = null): Builder
     {
         if (is_null($value)) {
             $value = $operate;
@@ -342,26 +314,26 @@ class Builder
         return $this;
     }
 
-    public function whereIn(string $field, $value): Builder
+    public function whereIn(string $field, array $value): Builder
     {
         return $this->where($field, 'in', $value);
     }
 
-    public function whereNotIn(string $field, $value): Builder
+    public function whereNotIn(string $field, array $value): Builder
     {
         return $this->where($field, 'not in', $value);
     }
 
-    public function whereLike(string $field, $value): Builder
+    public function whereLike(string $field, string $value): Builder
     {
         return $this->where($field, 'like', $value);
     }
 
-    public function highlight($fields)
+    public function highlight($fields): Builder
     {
         $fields = (array) $fields;
 
-        $fields = Collection::make($fields)
+        $fields = collect($fields)
             ->map(function ($item) {
                 return [
                     $item => new stdClass(),
@@ -390,22 +362,19 @@ class Builder
      *
      * @return $this
      */
-    public function setModel(Model $model)
+    public function setModel(Model $model): Builder
     {
         $this->model = $model;
         $this->client = $model->getClient();
-        $this->highlight = new stdClass();
-        $this->sort = new stdClass();
+        $this->highlight = [];
+        $this->sort = [];
         return $this;
     }
 
     /**
      * parseWhere.
-     *
-     * @param mixed $value
-     * @return array
      */
-    protected function parseQuery(string $field, string $operate, $value): Builder
+    protected function parseQuery(string $field, string $operate, mixed $value): Builder
     {
         switch ($operate) {
             case '=':
@@ -442,8 +411,8 @@ class Builder
                 $result = ['terms' => [$field => $value]];
                 break;
             case 'like':
-                $type = 'must';
-                $result = ['match' => [$field => $value]];
+                $type = 'filter';
+                $result = ['match_phrase' => [$field => $value]];
                 break;
             case 'regex':
                 $type = 'must';
@@ -453,12 +422,14 @@ class Builder
                 $type = 'must';
                 $result = ['prefix' => [$field => $value]];
                 break;
+            default:
+                throw new InvalidArgumentException('invalid argument');
         }
         $this->query['bool'][$type][] = $result;
         return $this;
     }
 
-    protected function run($method, ...$parameters)
+    protected function run($method, ...$parameters): mixed
     {
         $client = $this->client;
         $sql = $this->sql;
