@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Janartist\Elasticsearch;
 
+use Elasticsearch\Client;
 use Hyperf\Collection\Collection;
 use Hyperf\Context\ApplicationContext;
 use Hyperf\Logger\LoggerFactory;
@@ -16,7 +17,7 @@ use function Hyperf\Support\make;
 class Builder
 {
     /**
-     * @var \Elasticsearch\Client
+     * @var Client
      */
     protected $client;
 
@@ -133,7 +134,7 @@ class Builder
         });
     }
 
-    public function first(): Model
+    public function first(): ?Model
     {
         return $this->take(1)->get()->first();
     }
@@ -188,7 +189,7 @@ class Builder
     /**
      * insert.
      *
-     * @return \Hyperf\Collection\Collection
+     * @return Collection
      */
     public function create(array $value): Model
     {
@@ -215,7 +216,8 @@ class Builder
      */
     public function update(array $value, $id)
     {
-        $result = $this->run('update', [
+        $result = $this->run(
+            'update',
             [
                 'index' => $this->model->getIndex(),
                 'id' => $id,
@@ -223,7 +225,7 @@ class Builder
                     'doc' => $value,
                 ],
             ],
-        ]);
+        );
         if (! empty($result['result']) && ($result['result'] == 'updated' || $result['result'] == 'noop')) {
             $this->model->setOriginal($result);
             $this->model->setAttributes(['_id' => $result['_id'] ?? '']);
@@ -238,12 +240,13 @@ class Builder
      */
     public function delete($id): bool
     {
-        $result = $this->run('delete', [
+        $result = $this->run(
+            'delete',
             [
                 'index' => $this->model->getIndex(),
                 'id' => $id,
             ],
-        ]);
+        );
         if (! empty($result['result']) && $result['result'] == 'deleted') {
             return true;
         }
