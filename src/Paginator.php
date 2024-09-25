@@ -24,16 +24,19 @@ class Paginator implements Arrayable, JsonSerializable, Jsonable
 
     protected $items;
 
+    protected $totalItems;
+
     /**
      * Create a new paginator instance.
      *
      * @param mixed $items
      */
-    public function __construct($items, int $perPage, int $currentPage)
+    public function __construct($items, int $perPage, int $currentPage, int $totalItems)
     {
         $this->items = $items;
         $this->perPage = $perPage;
         $this->currentPage = $currentPage;
+        $this->totalItems = $totalItems;
 
         $this->setItems($items);
     }
@@ -61,6 +64,7 @@ class Paginator implements Arrayable, JsonSerializable, Jsonable
             'per_page' => $this->perPage,
             'data' => $this->items->toArray(),
             'has_more' => $this->hasMorePages(),
+            'total_items' => $this->totalItems,
         ];
     }
 
@@ -88,7 +92,7 @@ class Paginator implements Arrayable, JsonSerializable, Jsonable
     {
         $this->items = $items instanceof Collection ? $items : Collection::make($items);
 
-        $this->hasMore = $this->items->count() > $this->perPage;
+        $this->hasMore = $this->perPage * $this->currentPage < $this->totalItems;
 
         $this->items = $this->items->slice(0, $this->perPage);
     }

@@ -35,6 +35,13 @@ trait HasAttributes
         return $this->toJson();
     }
 
+    public function __get(string $key)
+    {
+        if (isset($this->attributes[$key])) {
+            return $this->attributes[$key];
+        }
+    }
+
     public function getAttributes(): array
     {
         return $this->attributes;

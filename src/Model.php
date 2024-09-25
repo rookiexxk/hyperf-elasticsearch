@@ -12,6 +12,9 @@ use JsonSerializable;
 
 use function Hyperf\Support\call;
 
+/**
+ * @mixin Builder
+ */
 abstract class Model implements Arrayable, Jsonable, JsonSerializable
 {
     use HasAttributes;
@@ -25,6 +28,11 @@ abstract class Model implements Arrayable, Jsonable, JsonSerializable
      * @var Client
      */
     protected $client;
+
+    protected array $mapping = [
+        'properties' => [
+        ],
+    ];
 
     /**
      * @var string
@@ -85,7 +93,7 @@ abstract class Model implements Arrayable, Jsonable, JsonSerializable
     /**
      * Create a new Model Collection instance.
      *
-     * @return \Hyperf\Collection\Collection
+     * @return Collection
      */
     public function newCollection(array $models = [])
     {
@@ -119,5 +127,29 @@ abstract class Model implements Arrayable, Jsonable, JsonSerializable
     public function setIndex(string $index): void
     {
         $this->index = $index;
+    }
+
+    public function getMapping()
+    {
+        return $this->mapping;
+    }
+
+    public static function whenQuery(array $params)
+    {
+        $searchFields = array_keys((new static())->getMapping()['properties'] ?? []);
+        return self::when($params, function (Builder $query) use ($params, $searchFields) {
+            foreach ($params as $item) {
+                [$field, $operator, $value] = $item;
+                if (! in_array($field, $searchFields)) {
+                    continue;
+                }
+                if ($operator == 'geo') {
+                    $query->geo((float) $value['lat'], (float) $value['lng'], distance: $value['distance'] ?? 2000)
+                        ->orderByGeo((float) $value['lat'], (float) $value['lng']);
+                } else {
+                    $query->where($field, $operator, $value);
+                }
+            }
+        });
     }
 }
