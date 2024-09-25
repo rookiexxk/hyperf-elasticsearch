@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Janartist\Elasticsearch;
 
 use Elasticsearch\Client;
+use Elasticsearch\Common\Exceptions\Missing404Exception;
 use Hyperf\Collection\Collection;
 use Hyperf\Context\ApplicationContext;
 use Hyperf\Logger\LoggerFactory;
@@ -55,28 +56,33 @@ class Builder
     /**
      * @var array
      */
-    protected $operate = ['=', '>', '<', '>=', '<=', '!=', '<>', 'in', 'not in', 'like', 'regex', 'prefix'];
+    protected $operate = ['=', '>', '<', '>=', '<=', '!=', '<>', 'in', 'not in', 'like', 'regex', 'prefix', 'filter', 'range', 'nested', 'multi match', 'or'];
+
+    protected array $source = [];
 
     /**
      * 分页.
      */
     public function page(int $size = 50, int $page = 1): Paginator
     {
-        $from = (($page - 1) * $size) + 1;
+        $from = (($page - 1) * $size);
         $this->sql = [
             'from' => $from,
             'size' => $size,
+            'track_total_hits' => true,
             'index' => $this->model->getIndex(),
             'body' => [
                 'query' => $this->query,
                 'highlight' => $this->highlight,
                 'sort' => $this->sort,
+                '_source' => $this->source,
             ],
         ];
         if (empty($this->query)) {
             $this->sql = [
                 'from' => $from,
                 'size' => $size,
+                'track_total_hits' => true,
                 'index' => $this->model->getIndex(),
                 'body' => [
                     'query' => [
@@ -87,33 +93,47 @@ class Builder
         }
         $result = $this->run('search', $this->sql);
         $original = $result['hits']['hits'] ?? [];
-
+        $total = $result['hits']['total']['value'] ?? 0;
+        /** @phpstan-ignore-next-line */
         $collection = Collection::make($original)->map(function ($value) {
             $attributes = $value['_source'] ?? [];
+            $attributes['hit_score'] = $value['_score'];
             $model = $this->model->newInstance();
             $model->setAttributes($attributes);
             $model->setOriginal($value);
             return $model;
         });
-        return make(Paginator::class, ['items' => $collection, 'perPage' => $size, 'currentPage' => $page]);
+
+        return make(Paginator::class, ['items' => $collection, 'perPage' => $size, 'currentPage' => $page, 'totalItems' => $total]);
+    }
+
+    public function select(array $fields): Builder
+    {
+        $this->source = $fields;
+
+        return $this;
     }
 
     public function get($size = 50): Collection
     {
         $this->sql = [
-            'from' => 1,
+            'from' => 0,
             'size' => $size,
+            'track_total_hits' => true,
             'index' => $this->model->getIndex(),
             'body' => [
                 'query' => $this->query,
                 'highlight' => $this->highlight,
                 'sort' => $this->sort,
+                '_source' => $this->source,
             ],
         ];
+
         if (empty($this->query)) {
             $this->sql = [
-                'from' => 1,
+                'from' => 0,
                 'size' => $size,
+                'track_total_hits' => true,
                 'index' => $this->model->getIndex(),
                 'body' => [
                     'query' => [
@@ -124,7 +144,7 @@ class Builder
         }
         $result = $this->run('search', $this->sql);
         $original = $result['hits']['hits'] ?? [];
-
+        /* @phpstan-ignore-next-line */
         return Collection::make($original)->map(function ($value) {
             $attributes = $value['_source'] ?? [];
             $model = $this->model->newInstance();
@@ -148,15 +168,18 @@ class Builder
     /**
      * 查找单条
      * @param mixed $id
-     * @return array
      */
-    public function find($id): Model
+    public function find($id): ?Model
     {
         $this->sql = [
             'index' => $this->model->getIndex(),
             'id' => $id,
         ];
-        $result = $this->run('get', $this->sql);
+        try {
+            $result = $this->run('get', $this->sql);
+        } catch (Missing404Exception) {
+            return null;
+        }
 
         $this->model->setAttributes($result['_source'] ?? []);
         $this->model->setOriginal($result);
@@ -164,7 +187,7 @@ class Builder
     }
 
     /**
-     * insert.
+     * 批量插入.
      */
     public function insert(array $values): Collection
     {
@@ -173,23 +196,119 @@ class Builder
             $body['body'][] = [
                 'index' => [
                     '_index' => $this->model->getIndex(),
+                    ...(isset($value['_id']) ? ['_id' => $value['_id']] : []),
                 ],
             ];
+            unset($value['_id']);
             $body['body'][] = $value;
         }
+
         $this->sql = $body;
         $result = $this->run('bulk', $this->sql);
         return collect($result['items'])->map(function ($value, $key) use ($values) {
-            $this->model->setAttributes(Arr::merge($values[$key] ?? [], ['_id' => $values['index']['_id'] ?? '']));
-            $this->model->setOriginal($value);
-            return $this->model;
+            $model = $this->model->newInstance();
+            $model->setAttributes(Arr::merge($values[$key] ?? [], ['_id' => $value['index']['_id'] ?? '']));
+            $model->setOriginal($value);
+            return $model;
         });
+    }
+
+    public function upsert(int|string $id, array $data): bool
+    {
+        $result = $this->run('update', [
+            'index' => $this->model->getIndex(),
+            'id' => $id,
+            'body' => [
+                'doc' => $data,
+                'doc_as_upsert' => true,
+            ],
+        ]);
+        if (! empty($result['result']) && ($result['result'] == 'updated' || $result['result'] == 'noop')) {
+            return true;
+        }
+
+        return false;
+    }
+
+    public function whereFunctionScore(array $query): Builder
+    {
+        $this->query['function_score'] = $query;
+
+        return $this;
+    }
+
+    public function whereBetween(string $field, array $value): Builder
+    {
+        $this->query['bool']['must'][] = ['range' => [$field => ['gte' => $value[0], 'lte' => $value[1]]]];
+
+        return $this;
+    }
+
+    public function geo(float $lat, float $lng, string $field = 'coordinate', int $distance = 2000): Builder
+    {
+        $this->query['bool']['filter'][] = [
+            'geo_distance' => [
+                'distance' => $distance . 'm',
+                $field => [
+                    'lat' => $lat,
+                    'lon' => $lng,
+                ],
+            ],
+        ];
+
+        return $this;
+    }
+
+    public function orderByGeo(float $lat, float $lng, string $field = 'coordinate', string $order = 'asc'): Builder
+    {
+        if (! is_array($this->sort)) {
+            $this->sort = [];
+        }
+
+        $this->sort[] = [
+            '_geo_distance' => [
+                $field => [
+                    'lat' => $lat,
+                    'lon' => $lng,
+                ],
+                'order' => $order,
+                'unit' => 'm',
+            ],
+        ];
+
+        return $this;
+    }
+
+    public function orderByField(string $field, array $fieldValues): Builder
+    {
+        if (! is_array($this->sort)) {
+            $this->sort = [];
+        }
+
+        $this->sort[] = [
+            '_script' => [
+                'script' => [
+                    'lang' => 'painless',
+                    'params' => ['ids' => $fieldValues],
+                    'source' => <<<EOD
+                        int idsCount = params.ids.size();
+                        int id = (int)doc['{$field}'].value;
+                        int foundIdx = params.ids.indexOf(id);
+                        return foundIdx > -1 ? foundIdx: idsCount + 1;
+                    EOD,
+                ],
+                'type' => 'number',
+                'order' => 'asc',
+            ],
+        ];
+
+        return $this;
     }
 
     /**
      * insert.
      *
-     * @return Collection
+     * @return static
      */
     public function create(array $value): Model
     {
@@ -234,11 +353,9 @@ class Builder
     }
 
     /**
-     * delete.
-     *
-     * @param string $id
+     * delete document.
      */
-    public function delete($id): bool
+    public function delete(string $id): bool
     {
         $result = $this->run(
             'delete',
@@ -330,10 +447,7 @@ class Builder
         return $this;
     }
 
-    /**
-     * @param null $value
-     */
-    public function where(string $field, string $operate, $value = null): Builder
+    public function where(string $field, string $operate, mixed $value = null): Builder
     {
         if (is_null($value)) {
             $value = $operate;
@@ -342,6 +456,28 @@ class Builder
         if (in_array($operate, $this->operate)) {
             $this->parseQuery($field, $operate, $value);
         }
+        return $this;
+    }
+
+    public function getPayLoad(): array
+    {
+        return [
+            'query' => $this->query,
+            'highlight' => $this->highlight,
+            'sort' => $this->sort,
+        ];
+    }
+
+    public function whereRaw(array $value): Builder
+    {
+        $this->query['bool']['must'][] = $value;
+
+        return $this;
+    }
+
+    public function whereOr(string $field, array $value): Builder
+    {
+        $this->query['bool']['must'][]['bool'] = $this->parseOr($field, $value);
         return $this;
     }
 
@@ -377,13 +513,15 @@ class Builder
     /**
      * orderBy.
      */
-    public function orderBy(string $field, bool $desc = false): Builder
+    public function orderBy(string $field, bool $desc = false, array $extra = []): Builder
     {
         $sort = $desc ? 'desc' : 'asc';
         if (! is_array($this->sort)) {
             $this->sort = [];
         }
-        $this->sort[] = [$field => ['order' => $sort]];
+        $value = ['order' => $sort];
+        $extra && $value = array_merge($value, $extra);
+        $this->sort[] = [$field => $value];
 
         return $this;
     }
@@ -402,63 +540,62 @@ class Builder
         return $this;
     }
 
-    /**
-     * parseWhere.
-     *
-     * @param mixed $value
-     * @return array
-     */
-    protected function parseQuery(string $field, string $operate, $value): Builder
+    /** @phpstan-ignore-next-line */
+    public function when($value, $callback, $default = null): self
     {
-        switch ($operate) {
-            case '=':
-                $type = 'must';
-                $result = ['match' => [$field => $value]];
-                break;
-            case '>':
-                $type = 'must';
-                $result = ['range' => [$field => ['gt' => $value]]];
-                break;
-            case '<':
-                $type = 'must';
-                $result = ['range' => [$field => ['lt' => $value]]];
-                break;
-            case '>=':
-                $type = 'must';
-                $result = ['range' => [$field => ['gte' => $value]]];
-                break;
-            case '<=':
-                $type = 'must';
-                $result = ['range' => [$field => ['lte' => $value]]];
-                break;
-            case '<>':
-            case '!=':
-                $type = 'must_not';
-                $result = ['match' => [$field => $value]];
-                break;
-            case 'in':
-                $type = 'must';
-                $result = ['terms' => [$field => $value]];
-                break;
-            case 'not in':
-                $type = 'must_not';
-                $result = ['terms' => [$field => $value]];
-                break;
-            case 'like':
-                $type = 'must';
-                $result = ['match' => [$field => $value]];
-                break;
-            case 'regex':
-                $type = 'must';
-                $result = ['regexp' => [$field => $value]];
-                break;
-            case 'prefix':
-                $type = 'must';
-                $result = ['prefix' => [$field => $value]];
-                break;
+        if ($value) {
+            return $callback($this, $value) ?: $this;
         }
-        $this->query['bool'][$type][] = $result;
+        if ($default) {
+            return $default($this, $value) ?: $this;
+        }
+
         return $this;
+    }
+
+    protected function parseQuery(string $field, string $operate, mixed $value): Builder
+    {
+        $parsedOperation = $this->parseOperation($field, $operate, $value);
+        match ($operate) {
+            'like',
+            '=',
+            '>' ,
+            '<' ,
+            '>=' ,
+            '<=' ,
+            'in',
+            'regex' ,
+            'prefix' ,
+            'multi match' ,
+            'range' => $this->query['bool']['must'][] = $parsedOperation,
+            'nested' => $this->query['bool']['filter'][] = $parsedOperation,
+            '<>', '!=',
+            'not in' => $this->query['bool']['must_not'][] = $parsedOperation,
+            'or' => $this->query['bool']['must'][]['bool'] = $this->parseOr($field, $value),
+            default => $this->query['bool'][$operate][] = [$field => $value],
+        };
+
+        return $this;
+    }
+
+    protected function parseOperation(string $field, string $operate, mixed $value): array
+    {
+        return match ($operate) {
+            'like', '=' => ['match' => [$field => $value]],
+            '>' => ['range' => [$field => ['gt' => $value]]],
+            '<' => ['range' => [$field => ['lt' => $value]]],
+            '>=' => ['range' => [$field => ['gte' => $value]]],
+            '<=' => ['range' => [$field => ['lte' => $value]]],
+            '<>', '!=' => ['match' => [$field => $value]],
+            'in' => ['terms' => [$field => $value]],
+            'not in' => ['terms' => [$field => $value]],
+            'regex' => ['regexp' => [$field => $value]],
+            'prefix' => ['prefix' => [$field => $value]],
+            'nested' => ['nested' => ['path' => $field, 'query' => $value]],
+            'multi match' => ['multi_match' => $value],
+            'range' => ['range' => [$field => ['gte' => $value[0], 'lte' => $value[1]]]],
+            default => [$operate => [$field => $value]],
+        };
     }
 
     protected function run($method, ...$parameters)
@@ -473,7 +610,16 @@ class Builder
         ApplicationContext::getContainer()
             ->get(LoggerFactory::class)
             ->get('elasticsearch', 'default')
-            ->debug('Elasticsearch run', compact('method', 'parameters', 'sql'));
+            ->debug('Elasticsearch run: ' . json_encode(compact('method', 'parameters', 'sql')));
         return call([$client, $method], $parameters);
+    }
+
+    protected function parseOr(string $field, array $value): array
+    {
+        $should = [];
+        foreach ($value as $v) {
+            $should[] = $this->parseOperation($field, $v[0], $v[1]);
+        }
+        return ['should' => $should, 'minimum_should_match' => 1];
     }
 }
