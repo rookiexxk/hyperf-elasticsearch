@@ -357,13 +357,17 @@ class Builder
      */
     public function delete(string $id): bool
     {
-        $result = $this->run(
-            'delete',
-            [
-                'index' => $this->model->getIndex(),
-                'id' => $id,
-            ],
-        );
+        try {
+            $result = $this->run(
+                'delete',
+                [
+                    'index' => $this->model->getIndex(),
+                    'id' => $id,
+                ],
+            );
+        } catch (Missing404Exception) {
+            return true;
+        }
         if (! empty($result['result']) && $result['result'] == 'deleted') {
             return true;
         }
