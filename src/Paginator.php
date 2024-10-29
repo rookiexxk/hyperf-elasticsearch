@@ -85,6 +85,38 @@ class Paginator implements Arrayable, JsonSerializable, Jsonable
     }
 
     /**
+     * Get the items being paginated.
+     */
+    public function items(): Collection
+    {
+        return $this->items;
+    }
+
+    /**
+     * get current page.
+     */
+    public function currentPage(): int
+    {
+        return $this->currentPage;
+    }
+
+    /**
+     * get per page size.
+     */
+    public function perPage(): int
+    {
+        return $this->perPage;
+    }
+
+    /**
+     * get total items.
+     */
+    public function total(): int
+    {
+        return $this->totalItems;
+    }
+
+    /**
      * Set the items for the paginator.
      * @param mixed $items
      */
