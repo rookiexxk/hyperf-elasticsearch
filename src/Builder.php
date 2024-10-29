@@ -9,7 +9,10 @@ use Elasticsearch\Common\Exceptions\Missing404Exception;
 use Hyperf\Collection\Collection;
 use Hyperf\Context\ApplicationContext;
 use Hyperf\Logger\LoggerFactory;
+use Psr\Container\NotFoundExceptionInterface;
+use Psr\Container\ContainerExceptionInterface;
 use stdClass;
+use TypeError;
 
 use function Hyperf\Collection\collect;
 use function Hyperf\Support\call;
@@ -59,6 +62,12 @@ class Builder
     protected $operate = ['=', '>', '<', '>=', '<=', '!=', '<>', 'in', 'not in', 'like', 'regex', 'prefix', 'filter', 'range', 'nested', 'multi match', 'or'];
 
     protected array $source = [];
+
+    /**
+     * aggs condition.
+     * @var array
+     */
+    protected array $aggs = [];
 
     /**
      * 分页.
@@ -305,6 +314,74 @@ class Builder
         return $this;
     }
 
+    /**
+     * group by field.
+     * @param string $field
+     * @param string $name
+     * @param null|int $size 
+     * @return Builder 
+     */
+    public function groupBy(string $field, string $name, ?int $size = null): Builder
+    {
+        $this->aggs[$name] = [
+            'terms' => [
+                'field' => $field,
+                ...(is_null($size) ? [] : ['size' => $size]),
+            ],
+        ];
+
+        return $this;
+    }
+
+    /**
+     * get aggregations result.
+     * @param null|array $aggs
+     * @return Collection
+     * @throws TypeError
+     * @throws NotFoundExceptionInterface
+     * @throws ContainerExceptionInterface
+     */
+    public function getAggregations(?array $aggs = null): Collection
+    {
+        $this->sql = [
+            'from' => 0,
+            'size' => 0,
+            'track_total_hits' => true,
+            'index' => $this->model->getIndex(),
+            'body' => [
+                'query' => $this->query,
+                'highlight' => $this->highlight,
+                'sort' => $this->sort,
+                '_source' => $this->source,
+                'aggs' => $this->aggs,
+            ],
+        ];
+
+        if (empty($this->query)) {
+            $this->sql = [
+                'from' => 0,
+                'size' => 0,
+                'track_total_hits' => true,
+                'index' => $this->model->getIndex(),
+                'body' => [
+                    'query' => [
+                        'match_all' => new stdClass(),
+                    ],
+                ],
+            ];
+        }
+        $result = $this->run('search', $this->sql);
+        $aggsResult = $result['aggregations'] ?? [];
+
+        /* @phpstan-ignore-next-line */
+        return Collection::make($aggsResult)->filter(function ($value, $key) use ($aggs) {
+            if (is_null($aggs)) {
+                return true;
+            }
+
+            return in_array($key, $aggs);
+        });
+    }
     /**
      * insert.
      *
