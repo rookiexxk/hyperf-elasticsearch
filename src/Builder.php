@@ -9,8 +9,8 @@ use Elasticsearch\Common\Exceptions\Missing404Exception;
 use Hyperf\Collection\Collection;
 use Hyperf\Context\ApplicationContext;
 use Hyperf\Logger\LoggerFactory;
-use Psr\Container\NotFoundExceptionInterface;
 use Psr\Container\ContainerExceptionInterface;
+use Psr\Container\NotFoundExceptionInterface;
 use stdClass;
 use TypeError;
 
@@ -65,7 +65,6 @@ class Builder
 
     /**
      * aggs condition.
-     * @var array
      */
     protected array $aggs = [];
 
@@ -288,6 +287,17 @@ class Builder
         return $this;
     }
 
+    public function orderByScript(array $script): Builder
+    {
+        if (! is_array($this->sort)) {
+            $this->sort = [];
+        }
+
+        $this->sort[] = $script;
+
+        return $this;
+    }
+
     public function orderByField(string $field, array $fieldValues): Builder
     {
         if (! is_array($this->sort)) {
@@ -316,10 +326,6 @@ class Builder
 
     /**
      * group by field.
-     * @param string $field
-     * @param string $name
-     * @param null|int $size 
-     * @return Builder 
      */
     public function groupBy(string $field, string $name, ?int $size = null): Builder
     {
@@ -335,8 +341,6 @@ class Builder
 
     /**
      * get aggregations result.
-     * @param null|array $aggs
-     * @return Collection
      * @throws TypeError
      * @throws NotFoundExceptionInterface
      * @throws ContainerExceptionInterface
@@ -382,6 +386,7 @@ class Builder
             return in_array($key, $aggs);
         });
     }
+
     /**
      * insert.
      *
