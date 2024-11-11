@@ -16,7 +16,7 @@ class ClientFactoryTest extends TestCase
 {
     public function testClientBuilderFactoryCreate()
     {
-        $clientFactory =  ApplicationContext::getContainer()->get(Client::class);
+        $clientFactory = ApplicationContext::getContainer()->get(Client::class);
 
         $client = $clientFactory->create();
 
