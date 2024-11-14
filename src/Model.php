@@ -20,11 +20,6 @@ abstract class Model implements Arrayable, Jsonable, JsonSerializable
     use HasAttributes;
 
     /**
-     * @var array|array<string>
-     */
-    protected static array $searchFields = [];
-
-    /**
      * @var string 索引
      */
     protected $index;
@@ -163,11 +158,7 @@ abstract class Model implements Arrayable, Jsonable, JsonSerializable
      */
     protected static function getSearchFields(): array
     {
-        if (! static::$searchFields) {
-            static::$searchFields = static::getAllFields((new static())->getMapping()['properties'] ?? []);
-        }
-
-        return static::$searchFields;
+        return static::getAllFields((new static())->getMapping()['properties'] ?? []);
     }
 
     protected static function getAllFields(array $mapping, string $prefix = ''): array
