@@ -20,6 +20,11 @@ abstract class Model implements Arrayable, Jsonable, JsonSerializable
     use HasAttributes;
 
     /**
+     * @var array|array<string>
+     */
+    protected static array $searchFields = [];
+
+    /**
      * @var string 索引
      */
     protected $index;
@@ -136,7 +141,7 @@ abstract class Model implements Arrayable, Jsonable, JsonSerializable
 
     public static function whenQuery(array $params)
     {
-        $searchFields = array_keys((new static())->getMapping()['properties'] ?? []);
+        $searchFields = static::getSearchFields();
         return self::when($params, function (Builder $query) use ($params, $searchFields) {
             foreach ($params as $item) {
                 [$field, $operator, $value] = $item;
@@ -151,5 +156,34 @@ abstract class Model implements Arrayable, Jsonable, JsonSerializable
                 }
             }
         });
+    }
+
+    /**
+     * Get all search fields.
+     */
+    protected static function getSearchFields(): array
+    {
+        if (! static::$searchFields) {
+            static::$searchFields = static::getAllFields((new static())->getMapping()['properties'] ?? []);
+        }
+
+        return static::$searchFields;
+    }
+
+    protected static function getAllFields(array $mapping, string $prefix = ''): array
+    {
+        $fields = [];
+
+        foreach ($mapping as $key => $value) {
+            if ($key === 'properties' && is_array($value)) {
+                $fields = array_merge($fields, static::getAllFields($value, $prefix));
+            } elseif (is_array($value) && isset($value['type'])) {
+                $fields[] = $prefix . $key;
+            } elseif (is_array($value) && ! isset($value['type'])) {
+                $fields = array_merge($fields, static::getAllFields($value, $prefix . $key . '.'));
+            }
+        }
+
+        return $fields;
     }
 }
