@@ -668,14 +668,12 @@ class Builder
     {
         return match ($operate) {
             'like' => ['match' => [$field => $value]],
-            '=' => ['term' => [$field => $value]],
+            '=', '<>', '!=' => ['term' => [$field => $value]],
             '>' => ['range' => [$field => ['gt' => $value]]],
             '<' => ['range' => [$field => ['lt' => $value]]],
             '>=' => ['range' => [$field => ['gte' => $value]]],
             '<=' => ['range' => [$field => ['lte' => $value]]],
-            '<>', '!=' => ['match' => [$field => $value]],
-            'in' => ['terms' => [$field => $value]],
-            'not in' => ['terms' => [$field => $value]],
+            'in', 'not in' => ['terms' => [$field => $value]],
             'regex' => ['regexp' => [$field => $value]],
             'prefix' => ['prefix' => [$field => $value]],
             'nested' => ['nested' => ['path' => $field, 'query' => $value]],
