@@ -645,14 +645,14 @@ class Builder
         match ($operate) {
             'like',
             '=',
-            '>' ,
-            '<' ,
-            '>=' ,
-            '<=' ,
+            '>',
+            '<',
+            '>=',
+            '<=',
             'in',
-            'regex' ,
-            'prefix' ,
-            'multi match' ,
+            'regex',
+            'prefix',
+            'multi match',
             'range' => $this->query['bool']['must'][] = $parsedOperation,
             'nested' => $this->query['bool']['filter'][] = $parsedOperation,
             '<>', '!=',
@@ -667,7 +667,8 @@ class Builder
     protected function parseOperation(string $field, string $operate, mixed $value): array
     {
         return match ($operate) {
-            'like', '=' => ['match' => [$field => $value]],
+            'like' => ['match' => [$field => $value]],
+            '=' => ['term' => [$field => $value]],
             '>' => ['range' => [$field => ['gt' => $value]]],
             '<' => ['range' => [$field => ['lt' => $value]]],
             '>=' => ['range' => [$field => ['gte' => $value]]],
