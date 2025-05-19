@@ -143,9 +143,11 @@ abstract class Model implements Arrayable, Jsonable, JsonSerializable
                 if (! in_array($field, $searchFields)) {
                     continue;
                 }
-                if ($operator == 'geo') {
-                    $query->geo((float) $value['lat'], (float) $value['lng'], distance: $value['distance'] ?? 2000)
-                        ->orderByGeo((float) $value['lat'], (float) $value['lng']);
+                if ($operator == 'geo' || (is_array($operator) && $operator['operator'] == 'geo')) {
+                    $query->geo((float) $value['lat'], (float) $value['lng'], distance: $value['distance'] ?? 2000);
+                    if ($operator['sort'] ?? true) {
+                        $query->orderByGeo((float) $value['lat'], (float) $value['lng']);
+                    }
                 } else {
                     $query->where($field, $operator, $value);
                 }
