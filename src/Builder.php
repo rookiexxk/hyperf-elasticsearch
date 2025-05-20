@@ -586,13 +586,14 @@ class Builder
     {
         $fields = (array) $fields;
 
-        $fields = Collection::make($fields)
-            ->map(function ($item) {
-                return [
-                    $item => new stdClass(),
-                ];
+        $fields = collect($fields)
+            ->mapWithKeys(function ($value, $key) {
+                return is_numeric($key)
+                    ? [$value => new stdClass()]
+                    : [$key => (object) $value];
             })->toArray();
         $this->highlight = compact('fields');
+
         return $this;
     }
 
