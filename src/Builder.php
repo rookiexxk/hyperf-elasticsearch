@@ -640,6 +640,19 @@ class Builder
         return $this;
     }
 
+    /**
+     * 添加聚合查询
+     *
+     * @param string $name 聚合名称
+     * @param array $aggregation 聚合定义
+     * @return $this
+     */
+    public function addAggs(string $name, array $aggregation): Builder
+    {
+        $this->aggs[$name] = $aggregation;
+        return $this;
+    }
+
     protected function parseQuery(string $field, string $operate, mixed $value): Builder
     {
         $parsedOperation = $this->parseOperation($field, $operate, $value);
