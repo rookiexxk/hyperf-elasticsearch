@@ -640,6 +640,12 @@ class Builder
         return $this;
     }
 
+    public function addAggs(string $name, array $aggregation): Builder
+    {
+        $this->aggs[$name] = $aggregation;
+        return $this;
+    }
+
     protected function parseQuery(string $field, string $operate, mixed $value): Builder
     {
         $parsedOperation = $this->parseOperation($field, $operate, $value);
